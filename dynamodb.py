@@ -26,7 +26,18 @@ def create_table(table='cache', region='us-west-2'):
                                   'AttributeName': 'sk',
                                   'KeyType': 'RANGE'
                               }],
-                              BillingMode='PAY_PER_REQUEST')
+                              BillingMode='PAY_PER_REQUEST',
+                              GlobalSecondaryIndexes=[{
+                                  'IndexName':
+                                  'primary',
+                                  'KeySchema': [{
+                                      'AttributeName': 'pk',
+                                      'KeyType': 'HASH'
+                                  }],
+                                  'Projection': {
+                                      'ProjectionType': 'ALL',
+                                  }
+                              }])
     except ClientError as e:
         logging.error(e)
         return False
@@ -46,7 +57,28 @@ def get(key, table='cache', region='us-west-2'):
     try:
         dynamodb = boto3.client('dynamodb', region_name=region)
         data = dynamodb.get_item(TableName=table, Key=convert(key))
+        if 'Item' not in data:
+            return None
         return revert(data['Item'])
+    except ClientError as e:
+        logging.error(e)
+        return None
+
+
+def query(key_expression,
+          expression_value,
+          table='cache',
+          region='us-west-2',
+          index_name='primary'):
+    try:
+        dynamodb = boto3.client('dynamodb', region_name=region)
+        data = dynamodb.query(TableName=table,
+                              IndexName=index_name,
+                              KeyConditionExpression=key_expression,
+                              ExpressionAttributeValues=expression_value)
+        if 'Items' not in data:
+            return None
+        return revert(data['Items'])
     except ClientError as e:
         logging.error(e)
         return None
@@ -108,3 +140,8 @@ if __name__ == '__main__':
     # }
     # res = get(key)
     # print(res)
+
+    key_expression = 'pk = :a'
+    expression_value = {':a': {'S': 'test1'}}
+    res = query(key_expression, expression_value)
+    print(res)
